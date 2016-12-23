@@ -1,0 +1,534 @@
+#!/bin/bash
+
+showdirs(){
+	local dirlist
+	local index
+
+	dirlist=`dirs -l`
+	index=0
+	for tr in $dirlist
+	do
+		echo "($index) $tr"
+		index=`expr $index + 1 `
+	done
+}
+
+getfullname(){
+	local here
+
+	here=`pwd`
+	cd $1
+	pwd
+	cd $here
+}
+
+skiptop(){
+	shift 1
+	echo $*
+}
+
+searchdirs(){
+	local obj
+
+	obj=`getfullname $1 | sed "s/\//_/g"`
+	showdirs |sed "s/\//_/g"| awk '$2~/^'$obj'$/{print $1}' |sed "s/[(]//" | sed "s/[)]//"
+	
+}
+
+searchdirs_likely(){
+	local obj
+
+	obj=`echo $1 | sed "s/\//_/g"`
+	showdirs |sed "s/\//_/g"| grep "$obj$" |awk '{print $1}'|sed "s/[(]//" | sed "s/[)]//"
+}
+
+go(){
+	local index
+	local index_likely
+	local rundant
+	local ct
+	local tr
+
+
+	echo -----$1
+
+	if [ ! "$1" = "" ];then
+		if [  -d $1 -o  -L $1 ];then
+			index=`searchdirs $1`
+			if [ ! "$index" = "" ];then
+				   rundant=`skiptop $index`
+				   if [ ! "$rundant" = "" ];then
+						ct=0
+						for tr in $rundant
+						do
+							tr=`expr $tr - $ct `
+							popd +$tr >/dev/null
+							ct=`expr $ct + 1 `
+						done
+				   fi
+				   pushd +$index 1>/dev/null
+			else
+				   pushd $1 1>/dev/null
+			fi
+		else
+			index_likely=`searchdirs_likely $1`	
+	#		echo index_likely before----$index_likely
+			index_likely=`echo $index_likely |awk '{print $1}'`
+	#		echo index_likely after ----$index_likely
+			if [ "$index_likely" == "" ];then
+				pushd +$1 1>/dev/null  2>&1
+			else
+				pushd +$index_likely 1>/dev/null
+			fi
+		fi
+	fi
+
+	showdirs
+
+	echo -----
+	ls
+}
+
+bk(){
+	local index
+	local ct
+	local tr
+
+	echo -----$1
+
+
+	if [ ! "$1" = "" ];then
+		popd +$1 1>/dev/null
+	else
+		index=`showdirs | awk '{print $1}' | sed "s/[(]//" | sed "s/[)]//"`
+		index=`skiptop $index`	
+
+		ct=0
+		for tr in $index
+		do
+			tr=`expr $tr - $ct `
+			popd +$tr 1>/dev/null
+			ct=`expr $ct + 1 `
+		done
+	fi
+	showdirs
+}
+
+
+find_file_type(){
+	local tdir
+
+	tdir=$1
+	shift
+	find ${tdir} $* -exec file -i '{}' \;
+}
+
+
+compress(){
+	local cmd
+	local level
+	local infiles
+	local infile
+	local tohere
+	local mark
+	local dotar
+	local best
+	local fast
+	local default
+	local ext
+	local realname
+	local wtime
+	local mem
+	local origsize
+	local compsize
+	local comprate
+
+	cmd=$1
+	level=$2
+	infile=$3
+	tohere=$4
+	if [ "x$5" != "xno" ];then
+		mark=_${5}
+	else
+		mark=
+	fi
+	if [ "x$6" = "xyes" ];then
+		dotar=.tar
+	else
+		dotar=
+	fi
+	best=9
+	fast=1
+	default=6
+	ext=$cmd
+	realname=${infile%%.*}
+
+	case $cmd in
+	gzip)
+		ext=gz
+		;;
+	bzip2)
+		ext=bz2
+		;;
+	xz | lzop | lz4)
+		;;
+	zip)
+		ext=zip
+		;;
+	bro)
+		best=11
+		fast=0
+	esac
+
+	if [ $level -ge $best ];then
+		level=$best
+	fi
+
+	if [ $level -le $fast ];then
+		level=$fast
+	fi
+
+	case $cmd in
+	gzip | bzip2 | xz | lzop | lz4)
+		#{ time $cmd -$level $infile -c > ${infile}.${ext}; }  2>.comp.log
+		`which time` -f "%E %M" -o .comp.log $cmd -$level $infile -c > ${realname}${mark}${dotar}.${ext}
+		;;
+	zip)
+		`which time` -f "%E %M" -o .comp.log $cmd ${realname}${mark}${dotar}.${ext} ${infile}
+		;;
+	bro)
+		#{ time $cmd --quality $level --input $infile --output $infile.${ext}; } 2>.comp.log
+		`which time` -f "%E %M" -o .comp.log $cmd --quality $level --input $infile --output ${realname}${mark}${dotar}.${ext}
+		;;
+	esac
+
+	wtime=`cat .comp.log|  awk '{print $1}'`
+	mem=`cat .comp.log|  awk '{print $2}'`
+	origsize=`stat -c "%s" $infile`
+	compsize=`stat -c "%s" ${realname}${mark}${dotar}.${ext}`
+	comprate=`echo $origsize $compsize | awk '{printf("%.3f",$2*100/$1)}'`
+	echo "Info: $cmd  level: $level ${infile} -> ${realname}${mark}${dotar}.${ext}"
+	echo "      $infile $origsize B $compsize B ${comprate}% $wtime $mem KB"
+	if [ "x$tohere" = "xyes" ];then
+		mv ${realname}${mark}${dotar}.${ext} ${here}
+	fi
+	rm .comp.log
+}
+
+comp_usage(){
+	echo "Usage: comp [gzip|bzip2|xz|bro|lzop|lz4] -[t|m] [ -w <filename> ] [-<Compress level>] [-h] [file1|dir1] [file2|dir2]...."
+	echo -e  "\t -w: compress all files into one compressed tar file."
+	echo -e  "\t -m: mv compressed file to the current directory."
+	echo -e  "\t -t: add time infomation to compressed file name."
+	echo -e  "\t -h: show this help message."
+}
+
+comp(){
+	local here
+	local gcmd
+	local glevel
+	local infiles
+	local allinone
+	local allinone_file
+	local mvtohere
+	local append
+	local istar
+	local glevel
+	local skip
+	local gfname
+	local wtime
+	local mem
+	local origsize
+	local compsize
+	local comprate
+	local gpath
+	local gfname
+	local ext
+
+	here=`pwd`
+	gcmd=gzip
+	glevel=6
+	infiles=
+	allinone=no
+	allinone_file="allinone"
+	mvtohere=no
+	append=no
+	istar=no
+
+	while [ "x$1" != "x" ];
+	do
+		if [[ "$1" =~ ^-[0-9]+$ ]];then
+			glevel=${1#-}
+		else
+			if [[ "$1" =~ ^-h$ ]];then
+				comp_usage
+				return
+			fi
+
+			if [[ "$1" =~ ^-w$ ]];then
+				allinone=yes
+				shift
+				allinone_file=$1
+				if [ "x$allinone_file" = "x" ];then
+					allinone_file=unknown
+				fi
+				shift
+				continue
+			fi
+
+			if [[ "$1" =~ ^-m$ ]];then
+				mvtohere=yes
+				shift
+				continue
+			fi
+
+			if [[ "$1" =~ ^-t$ ]];then
+				append=`date +"%Y%m%d_%H%M%S"`
+				shift
+				continue
+			fi
+
+			skip=no
+			for tp in gzip bzip2 xz bro lzop lz4 zip bz2 gz
+			do
+				if [ "x$tp" = "x$1" ];then
+					case $tp in
+					gzip | gz)
+						gcmd=gzip
+						;;
+					bzip2 | bz2)
+						gcmd=bzip2
+						;;
+					*)
+						gcmd=$tp
+						;;
+					esac
+					skip=yes
+					break;
+				fi
+			done
+
+			if [ "x$skip" = "xyes" ];then
+				shift
+				continue
+			fi
+
+			if [ -f $1 -o -d $1 ];then
+				if ! [[ "$infiles" =~ " "*$1" "* ]];then
+					infiles="$infiles `readlink -e ${1%/}`"
+				fi
+			else
+				echo "Invalid file: $1."
+			fi
+		fi
+
+		shift
+	done
+
+	if [ "x$infiles" = "x" ];then
+		echo "No valid input file found."
+		comp_usage
+		return
+	fi
+
+	if [ "x$allinone" = "xyes" ];then
+		if [ $gcmd != "zip" ];then
+			rm -fr $allinone_file 2>/dev/null
+			mkdir $allinone_file
+			cp -raf $infiles $allinone_file
+			tar cvf ${allinone_file}.tar $allinone_file 2>/dev/null
+			rm -fr $allinone_file
+			gfname=${allinone_file}.tar
+			istar=yes
+			compress $gcmd $glevel ${gfname} meanless ${append} ${istar}
+			rm $gfname
+		else
+			gfname=${allinone_file}.zip
+			`which time` -f "%E %M" -o .comp.log zip $gfname $infiles
+			wtime=`cat .comp.log|  awk '{print $1}'`
+			mem=`cat .comp.log|  awk '{print $2}'`
+			origsize="-"
+			compsize=`stat -c "%s" $gfname`
+			comprate="-"
+			echo "Info: $cmd  ... -> $gfname"
+			echo "      ... $origsize B $compsize B ${comprate}% $wtime $mem KB"
+			rm .comp.log
+		fi
+	else
+		for tf in $infiles
+		do
+			gfname=${tf##*/};
+			gpath=${tf%/*}
+			if [ "x$gpath" != "x" ];then
+				cd $gpath
+			fi
+
+			if [ -d $tf ];then
+				tar cvf ${gfname}.tar $gfname 2>/dev/null
+				istar=yes
+				gfname=${tf}.tar
+				
+			fi
+			compress $gcmd $glevel ${gfname} $mvtohere ${append} ${istar}
+
+			ext=${gfname##*.}
+			if [ "x$ext" = "xtar" ];then
+				rm $gfname
+			fi
+		done
+
+		cd ${here}
+	fi
+}
+
+decompress(){
+	local infile
+	local fname
+	local cmd
+	local wtime
+	local mem
+	local origsize
+	local decompsize
+	local comprate
+
+	infile=$1
+	fname=$2
+	cmd=$3
+
+	case $cmd in
+	gzip | bzip2 | xz | lzop | lz4)
+		#{ time $cmd -d $infile -c > ${fname} ; }  2>.decomp.log
+		`which time` -f "%E %M" -o .decomp.log $cmd -d $infile -c > ${fname}
+		;;
+	zip)
+		`which time` -f "%E %M" -o .decomp.log un$cmd $infile 
+		;;
+	bro)
+		#{ time $cmd --decompress --input $infile --output ${fname} ; } 2>.decomp.log
+		`which time` -f "%E %M" -o .decomp.log $cmd --decompress --input $infile --output ${fname}
+	esac
+
+	#wtime=`cat .decomp.log| grep "^real" | awk '{print $2}'`
+	wtime=`cat .decomp.log| awk '{print $1}'`
+	mem=`cat .decomp.log| awk '{print $2}'`
+	origsize=`stat -c "%s" $infile`
+	if [ -f "${fname}" ];then
+		decompsize=`stat -c "%s" ${fname}`
+		comprate=`echo $origsize $decompsize | awk '{OFMT="%3g"}{print $2/$1}'`
+	else
+		decompsize="-"
+		comprate="-"
+	fi
+	echo "Info: $cmd decompress ${infile} -> ${fname}"
+	echo "      $infile $origsize B $decompsize B ${comprate}% $wtime $mem KB"
+	rm .decomp.log
+}
+
+decomp_usage(){
+	echo "Usage: decomp -[h|m] [compressed file1] [compressed file2]...."
+	echo "       Recognized file extensions:"
+	echo "       .gz .bzip2 .xz .bro .lzop .lz4"
+	echo "       .tar.gz .tar.bzip2 tar.xz .tar.bro .tar.lzop .lz4"
+	echo -e "\t -m: mv decompressed files to current directory."
+	echo -e "\t -h: show this help message."
+
+}
+
+decomp(){
+	local infiles
+	local ifuntar
+	local mvtohere
+	local gfname
+	local gftype
+	local gfname
+	local gpath
+	local realname
+	local here
+
+	here=`pwd`
+	infiles=
+	ifuntar=yes
+	mvtohere=no
+
+	while [ "x$1" != "x" ];
+	do
+		if [[ "$1" =~ ^-h$ ]];then
+			decomp_usage
+			return
+		fi
+
+		if [[ "$1" =~ ^-m$ ]];then
+			mvtohere=yes
+			shift
+			continue
+		fi
+
+		if [ -f $1 ];then
+			if ! [[ "$infiles" =~ " "*$1" "* ]];then
+				infiles="$infiles $1"
+			fi
+		else
+			echo "Invalid file: $1."
+		fi
+
+		shift
+	done
+
+	if [ "x$infiles" = "x" ];then
+		echo "No valid input file found."
+		decomp_usage
+		return
+	fi
+
+
+	for tf in $infiles
+	do
+		gfname=${tf%.*}
+		gftype=
+		for tp in gz bzip2 xz bro lzop lz4 zip bz2 gzip
+		do
+			if [ $tp = ${tf##*.} ];then
+
+				case $tp in
+				gzip | gz)
+					gftype=gzip
+					;;
+				bzip2 | bz2)
+					gftype=bzip2
+					;;
+				*)
+					gftype=$tp
+					;;
+				esac
+
+				break
+			fi
+		done
+
+		if [ "x$gftype" = "x" ];then
+			echo "File type (${tf##*.}) not supported."
+			return
+		fi
+
+		if [ "x$mvtohere" = "xyes" ];then
+			gfname=${gfname##*/}
+		fi
+
+		decompress $tf $gfname $gftype 
+
+
+		ext=${gfname##*.}
+		gpath=${gfname%/*}
+		realname=${gfname##.*/}
+		if [ "x$ext" = "xtar" ];then
+			if [ -d $gpath ];then
+				cd $gpath	
+			fi
+			tar xvf $realname
+			rm $realname
+		fi
+
+		cd ${here}
+
+	done
+}
