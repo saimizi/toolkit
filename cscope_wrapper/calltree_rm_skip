@@ -1,0 +1,13 @@
+#!/bin/bash
+
+skip_file=$CALLTREE_SKIP_DIR/.calltree.skip
+
+for tmp in $*
+do
+	check=""
+	check=`cat $skip_file | grep "^$tmp$"`
+	if [ ! "$check" = "" ];then
+		sed -ie "/^$tmp$/d" $skip_file
+	fi
+done
+

@@ -1,0 +1,3 @@
+#!/bin/bash
+
+${0%/*}/code/checkpatch.pl --no-tree --file --terse  $*

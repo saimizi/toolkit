@@ -1,0 +1,201 @@
+#!/bin/bash
+
+get_color31(){
+	echo "\033[31;1m${1}\033[0m"
+}
+get_color34(){
+	echo "\033[34;1m${1}\033[0m"
+}
+get_color35(){
+	echo "\033[35;1m${1}\033[0m"
+}
+get_color32(){
+	echo "\033[32;1m${1}\033[0m"
+}
+get_color_bold(){
+	echo "\033[1;1m${1}\033[0m"
+}
+
+check_searched(){
+       found=""
+       found=`echo $searched | grep -e ":$1:"`
+       if [ "$found" = "" ];then
+               echo "false"
+       else
+               echo "true"
+       fi
+}
+
+
+register_searched(){
+       check=`check_searched $1`
+       if [ "$check" = "true" ];then
+               return
+       fi
+
+       searched=${searched}:$1:
+}
+
+show_child(){
+	root=$1
+
+	tmp=$level
+	space="\t"
+	echo -n "$level  "
+	while [ $tmp -ne 0 ]
+	do
+		space="\t$space"
+		tmp=`expr $tmp - 1 `
+	done
+
+	if [ $level -eq 0 ];then
+		mark=""
+	else
+		if [ "$flag" = "-d" ];then
+			mark="> "
+		else	
+			mark="< "
+		fi
+	fi
+
+	echo -e "${space}${mark}$root"
+
+
+}
+
+find_child(){
+	if [ $level -gt $limit_level ];then
+		return
+	fi
+
+	root_show=$1
+	root=`echo $root_show|sed "s/:.*$//"`
+
+	if [ "$flag" = "-d" ];then
+		child=`sfindsym ${flag} $root | awk '$2~/^[a-z|A-Z|_].*$/{printf(" %s",$2)} $2!~/^[a-z|A-Z|_].*$/{print "Unknown"} $1~/arch\//{print ":arch"} $1~/drivers\//{print ":drivers"} $1~/fs\//{print ":fs"}' |uniq`
+	else
+		child=`sfindsym ${flag} $root | awk '$2~/^[a-z|A-Z|_].*$/{print $2} $2!~/^[a-z|A-Z|_].*$/{print "Unknown"}' |sort|uniq`
+	fi
+
+	check=`cat ${skip_list_file} 2>/dev/null |grep "^$root$" ` 
+	if [ ! "$check" = "" ];then
+		skip_mark=`get_color34 "(+)"`
+	else
+		skip_mark=""
+	fi
+
+        check=`check_searched $root`
+        if [ "$check" = "true" ];then
+		skip_mark=${skip_mark}`get_color32 "(|)"`
+        fi
+
+        if [ "$root" = "Unknown" ];then
+		root_show=`get_color_bold ${root_show}`
+		skip_mark=${skip_mark}`get_color35 "(?)"`
+	else
+		root_show=$root_show
+        fi
+
+        if [ "$child" = "" ];then
+		root_show=`get_color31 ${root_show}`
+	else
+		root_show=$root_show
+        fi
+
+	register_searched $root
+	show_child ${root_show}${skip_mark}
+
+	if [  ! "$skip_mark" = "" ];then
+		return
+	fi
+
+	for tmp in $child 
+	do
+
+		level=`expr $level + 1`
+		find_child $tmp
+		level=`expr $level - 1`
+	done
+
+}
+
+
+tgt_func=$1
+limit_level=5
+searched=""
+level=0
+flag=-c
+
+skip_list_file=$CALLTREE_SKIP_DIR/.calltree.skip
+
+if [ "$1" = "" ];then
+	exit
+fi
+
+if [ "$1" = "-a" ];then
+	shift
+	calltree_add_skip $*
+	exit
+fi
+
+if [ "$1" = "-r" ];then
+	shift
+	calltree_rm_skip $*
+	exit
+fi
+
+if [ "$1" = "-s" ];then
+	tail $skip_list_file
+	exit
+fi
+
+if [ "$1" = "-h" ];then
+	echo
+	echo "Calltree -v1.0"
+	echo "A sotfware to show call-graph basing on cscope and shell script."
+	echo -e "-h:\t\t\t\tShow this help."
+	echo -e "-d:[level=5(default)]<FUNC>:\tShow the call-graph of <FUNC>."
+	echo -e "-c:[level=5(default)]<FUNC>:\tShow the reversed call-graph of <FUNC>."
+	echo -e "-a:<symbol-list>:\t\tAdd symobols to skip-list, which will be shown like 'spin_lock(+)', "
+	echo -e "\t\t\t\tand the further call-graph of the skipped function will not be shown"
+	echo -e "-r:<symbol-list>:\t\tRemove the symbols from skip-list."
+	echo -e "-s::\t\t\t\tShow the last few symbols that are added to skip recently."
+	echo
+	exit
+fi
+
+if [ ! -e cscope.out ];then
+	#if there is no cscope.out, make it first.
+	echo "cscope.out is not found!"
+	#mkkcs -a .
+	exit
+fi
+
+check=`echo $1| grep "^-d[0-9]*$"`
+if [ ! "$check" = "" ];then
+	flag=-d
+	tmp_limit_level=`echo $1 |sed "s/^-d//"`	
+	if [ ! $tmp_limit_level = "" ];then
+		limit_level=$tmp_limit_level
+	fi
+	shift
+	find_child $1
+	exit
+fi
+
+check=`echo $1| grep "^-c[0-9]*$"`
+if [ ! "$check" = "" ];then
+	flag=-c
+	tmp_limit_level=`echo $1 |sed "s/^-c//"`	
+	if [ ! $tmp_limit_level = "" ];then
+		limit_level=$tmp_limit_level
+	fi
+	shift
+	find_child $1
+	exit
+fi
+
+
+
+
+

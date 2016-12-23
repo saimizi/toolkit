@@ -1,0 +1,57 @@
+#!/bin/bash
+
+#default find the defintion of the symbole
+flag=1
+
+if [ "$1" = "" ];then
+	exit
+fi
+
+if [ ! -e cscope.out ];then
+	#if there is no cscope.out, make it first
+	mkkcs -a .
+fi
+
+if [ "$1" = "-s" ];then
+	flag=0
+	shift
+elif [ "$1" = "-g" ];then
+	flag=1
+	shift
+elif [ "$1" = "-d" ];then
+	flag=2
+	shift
+elif [ "$1" = "-c" ];then
+	flag=3
+	shift
+elif [ "$1" = "-t" ];then
+	flag=4
+	shift
+elif [ "$1" = "-e" ];then
+	flag=6
+	shift
+elif [ "$1" = "-f" ];then
+	flag=7
+	shift
+elif [ "$1" = "-i" ];then
+	flag=8
+	shift
+fi 
+
+
+
+cscope -Fcscope.out -${flag} $1 -d -L -k | sed "s/^.*linux-[0-9|.]*\///" |sed "s/\ /,/" |sed "s/\ /,/" |sed "s/\ /,/" |sed "s/\*/\'*\'/"> .tmp.findsym
+#cat .tmp.findsym |awk 'BEGIN{FS=",";num=1}{printf("%d %s %d %s \n\t%s\n",num,$2,$3,$1,$4);num++}'
+index=1
+while read line
+do
+	sym_name=` echo $line |awk 'BEGIN{FS=","}{print $2}'`
+	line_num=` echo $line |awk 'BEGIN{FS=","}{print $3}'`
+	file_name=` echo $line |awk 'BEGIN{FS=","}{print $1}'`
+	mesg=`echo $line |awk 'BEGIN{FS=","}{print $4}'`
+	echo -e "\033[1m $index \033[0m \033[34;1m <<$sym_name>> \033[0m\t\t\033[31;1m $line_num \033[0m\t\033[1m $file_name\033[0m"
+	echo -e "\t$mesg" 
+	index=`expr $index + 1 `
+done <.tmp.findsym
+rm .tmp.findsym
+

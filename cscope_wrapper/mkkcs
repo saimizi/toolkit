@@ -1,0 +1,75 @@
+#!/bin/bash
+
+#mkkcs <command|PATH name> [mn10300|uniphier|arm|kernel|NULL]
+
+tagdir=~/cstags
+
+if [ "$1" = "" ];then
+	exit
+fi
+
+if [ "$1" = "clean" ];then
+	rm cscope.*
+	exit
+fi
+
+ifinstall=""
+
+if [ "$1" = "install" ];then
+	ifinstall="yes"	
+	shift
+fi
+
+ls cscope.out 2>/dev/null
+if [ "$?" -eq 2 ];then
+	KSRC=`readlink -f $1`
+	ARCH=$2
+
+	if [ ! -d "$KSRC" ];then
+		exit
+	fi
+
+   if [ "$ARCH" == "mn10300" ];then
+	   find $KSRC -path "$KSRC/arch/*" ! -path "$KSRC/arch/mn10300*" -prune -o 			\
+		-path "$KSRC/tmp*" -prune -o									\
+		-path "$KSRC/\.*" -prune -o									\
+		-path "$KSRC/Documentation*" -prune -o 							\
+		-path "$KSRC/scripts*" -prune -o								\
+		-name "*.[chsS]" -print >cscope.files
+   elif [ "$ARCH" == "arm" ];then
+	   find $KSRC  											\
+		-path "$KSRC/arch/*" ! -path "$KSRC/arch/arm*" -prune -o					\
+		-path "$KSRC/tmp*" -prune -o									\
+		-path "$KSRC/\.*" -prune -o									\
+		-path "$KSRC/Documentation*" -prune -o 							\
+		-path "$KSRC/scripts*" -prune -o								\
+		-name "*.[chsS]" -print >cscope.files
+   elif [ "$ARCH" == "uniphier" ];then
+	   find $KSRC  											\
+		-path "$KSRC/arch/*" ! -path "$KSRC/arch/arm*" -prune -o					\
+		-path "$KSRC/arch/arm/mach-*" ! -path "$KSRC/arch/arm/mach-uniphier*" -prune -o		\
+		-path "$KSRC/arch/arm/plat-*" -prune -o							\
+		-path "$KSRC/tmp*" -prune -o									\
+		-path "$KSRC/\.*" -prune -o									\
+		-path "$KSRC/Documentation*" -prune -o 							\
+		-path "$KSRC/scripts*" -prune -o								\
+		-name "*.[chsS]" -print >cscope.files
+   elif [ "$ARCH" == "kernel" ];then
+	   find $KSRC  											\
+		-path "$KSRC/tmp*" -prune -o									\
+		-path "$KSRC/\.*" -prune -o									\
+		-path "$KSRC/Documentation*" -prune -o 							\
+		-name "*.[chsS]" -print >cscope.files
+   else
+	   find $KSRC -name "*.[chsS]" -print >cscope.files
+	   find $KSRC -name "*.cpp" -print >>cscope.files
+	   find $KSRC -name "*.hpp" -print >>cscope.files
+   fi
+
+	cscope -b -q -k
+fi
+
+if [ "x$ifinstall" = "xyes" ];then
+	rm -f $tagdir/*
+	cp cscope* $tagdir
+fi

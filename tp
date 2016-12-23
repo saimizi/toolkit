@@ -1,0 +1,12 @@
+#!/bin/bash
+
+
+if [ ! -e /tmp/distp ]; then
+	/usr/bin/xinput disable `xinput list | grep TouchPad | awk  '{print $7}' | awk 'BEGIN{FS="="}{print $2}'`
+	/usr/bin/xinput disable `xinput list | grep TouchPad | awk  '{print $7}' | awk 'BEGIN{FS="="}{print $2}'`
+	/usr/bin/xinput disable `xinput list | grep TouchPad | awk  '{print $7}' | awk 'BEGIN{FS="="}{print $2}'`
+	touch /tmp/distp
+else
+	/usr/bin/xinput enable `xinput list | grep TouchPad | awk  '{print $7}' | awk 'BEGIN{FS="="}{print $2}'`
+	rm /tmp/distp
+fi
