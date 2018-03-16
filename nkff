@@ -1,0 +1,10 @@
+#!/bin/bash
+
+for i in $*
+do
+#nkf -Lu -s $i >/home/joukan/.nkftmp
+#nkf -Lu -e $i >/home/joukan/.nkftmp
+nkf -w8 $i >/home/joukan/.nkftmp
+cp /home/joukan/.nkftmp $i
+done
+

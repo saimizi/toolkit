@@ -1,0 +1,35 @@
+#!/bin/bash  
+
+cleandir() {
+	cd $1
+	things=`ls -al | awk '$1~/^-/{print $9}' 2>/dev/null`
+#	things=`ls -a`
+	for j in $things
+	do
+		flg=`file $j |grep ASCII`	
+		if [ "$flg" ];
+		then
+			echo $j - yes
+			nkf -Lu -e $j >$j.nkftmp
+			mv $j.nkftmp $j
+			rm -f $j.nkftmp
+		else
+			echo $j - no
+		fi	
+	done
+
+
+
+	subdir=`ls -l | awk '$1~/^d/{print $9}'`
+	if [ ! "$subdir" = "" ];
+	then
+		for i in $subdir
+		do
+			cleandir $i
+			cd ..
+		done
+	fi
+}
+
+cleandir $1
+
