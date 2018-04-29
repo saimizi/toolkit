@@ -71,5 +71,8 @@ fi
 
 if [ "x$ifinstall" = "xyes" ];then
 	rm -f $tagdir/*
-	cp cscope* $tagdir
+	ln -srf cscope.out $tagdir/
+	ln -srf cscope.in.out $tagdir/
+	ln -srf cscope.po.out $tagdir/
+	ln -srf cscope.files $tagdir/
 fi
