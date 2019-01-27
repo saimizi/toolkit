@@ -1,0 +1,47 @@
+#!/bin/bash
+
+ret=1
+pid=$1
+
+getinfo() {
+	item=$1
+
+	num=0
+	case ${item} in
+		pid	) num=1 ;;
+		comm	) num=2 ;;
+		state	) num=3 ;;
+		ppid	) num=4 ;;
+		pgrp	) num=5 ;;
+		session	) num=6 ;;
+		tty_nu	) num=7 ;;
+		tpgid	) num=8 ;;
+		flags	) num=8 ;;
+	esac
+
+	cat /proc/${pid}/stat | awk '{print $'${num}'}'
+}
+
+while [ 1 ];
+do
+	if [ -z "$pid" ];then
+		break
+	fi
+
+	if [ ! -e /proc/${pid} ];then
+		break
+	fi
+
+	
+	echo "Comm: `getinfo comm`"
+	echo "State: `getinfo state`"
+	echo "Ppid: `getinfo ppid`"
+	echo "Pgrp: `getinfo pgrp`"
+	echo "Session: `getinfo session`"
+	echo "TTY num: `getinfo tty_nu`"
+	echo "Process group id: `getinfo tpgid`"
+
+	break
+done
+
+exit ${ret}
