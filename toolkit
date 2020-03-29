@@ -43,18 +43,45 @@ searchdirs_likely(){
 }
 
 go(){
+	orig_go=`which go 2>/dev/null`
+	if [ "$orig_go" != "" ]; then
+		case "$1" in
+			bug | build | clean | doc | env | fix | fmt | generate  \
+			| get | install | list | mod | run | test | tool \
+			| version  | help | vet)
+				$orig_go $*
+				;;
+			*)
+				g $*
+				;;
+		esac
+	else
+		g $*
+	fi
+}
+
+g(){
 	local index
 	local index_likely
 	local rundant
 	local ct
 	local tr
+	local topath
 
 
-	echo -----$1
+	topath=$(gu -showPath $@)
+	if [ "x$topath" != "x" ];then
+		if [ -d $topath ];then
+			topath=$(realpath $topath)
+		fi
+	fi
+	echo -----$topath
 
-	if [ ! "$1" = "" ];then
-		if [  -d $1 -o  -L $1 ];then
-			index=`searchdirs $1`
+
+
+	if [ ! "$topath" = "" ];then
+		if [  -d $topath -o  -L $topath ];then
+			index=`searchdirs $topath`
 			if [ ! "$index" = "" ];then
 				   rundant=`skiptop $index`
 				   if [ ! "$rundant" = "" ];then
@@ -68,15 +95,15 @@ go(){
 				   fi
 				   pushd +$index 1>/dev/null
 			else
-				   pushd $1 1>/dev/null
+				   pushd $topath 1>/dev/null
 			fi
 		else
-			index_likely=`searchdirs_likely $1`	
+			index_likely=`searchdirs_likely $topath`
 	#		echo index_likely before----$index_likely
-			index_likely=`echo $index_likely |awk '{print $1}'`
+			index_likely=`echo $index_likely |awk '{print $topath}'`
 	#		echo index_likely after ----$index_likely
 			if [ "$index_likely" == "" ];then
-				pushd +$1 1>/dev/null  2>&1
+				pushd +$topath 1>/dev/null  2>&1
 			else
 				pushd +$index_likely 1>/dev/null
 			fi
@@ -85,8 +112,8 @@ go(){
 
 	showdirs
 
-	echo -----
-	ls
+	echo ----- $@
+	gu  $@
 }
 
 bk(){
