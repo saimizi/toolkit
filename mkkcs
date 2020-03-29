@@ -51,6 +51,8 @@ elif [ "$ARCH" == "kernel" ];then
 	 -name "*.[chsS]" -print >cscope.files
 else
 	find $KSRC -name "*.[chsS]" -print >cscope.files
+	find $KSRC -name "*.cpp" -print >>cscope.files
+	find $KSRC -name "*.hpp" -print >>cscope.files
 fi
 
 
