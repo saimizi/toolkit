@@ -1,5 +1,9 @@
 #!/bin/bash
 
+complete -f -d -W "-p -H bug build clean doc env fix fmt generate get install list mod run test tool version vet" go
+complete -W "buildmode c cache environment filetype go.mod gopath gopath-get goproxy importpath modules module-get module-auth module-private packages testflag testfunc" go-help
+complete -d -W "-p -H -removePath -showCurrent -showNextPath -showPatches" gubin
+
 showdirs(){
 	local dirlist
 	local index
@@ -52,12 +56,16 @@ go(){
 				$orig_go $*
 				;;
 			*)
-				g $*
+				gu $*
 				;;
 		esac
 	else
-		g $*
+		gu $*
 	fi
+}
+
+go-help(){
+	go help $1
 }
 
 g(){
@@ -66,22 +74,13 @@ g(){
 	local rundant
 	local ct
 	local tr
-	local topath
 
 
-	topath=$(gu -showPath $@)
-	if [ "x$topath" != "x" ];then
-		if [ -d $topath ];then
-			topath=$(realpath $topath)
-		fi
-	fi
-	echo -----$topath
+	echo -----$1
 
-
-
-	if [ ! "$topath" = "" ];then
-		if [  -d $topath -o  -L $topath ];then
-			index=`searchdirs $topath`
+	if [ ! "$1" = "" ];then
+		if [  -d $1 -o  -L $1 ];then
+			index=`searchdirs $1`
 			if [ ! "$index" = "" ];then
 				   rundant=`skiptop $index`
 				   if [ ! "$rundant" = "" ];then
@@ -95,15 +94,15 @@ g(){
 				   fi
 				   pushd +$index 1>/dev/null
 			else
-				   pushd $topath 1>/dev/null
+				   pushd $1 1>/dev/null
 			fi
 		else
-			index_likely=`searchdirs_likely $topath`
+			index_likely=`searchdirs_likely $1`	
 	#		echo index_likely before----$index_likely
-			index_likely=`echo $index_likely |awk '{print $topath}'`
+			index_likely=`echo $index_likely |awk '{print $1}'`
 	#		echo index_likely after ----$index_likely
 			if [ "$index_likely" == "" ];then
-				pushd +$topath 1>/dev/null  2>&1
+				pushd +$1 1>/dev/null  2>&1
 			else
 				pushd +$index_likely 1>/dev/null
 			fi
@@ -112,8 +111,28 @@ g(){
 
 	showdirs
 
-	echo ----- $@
-	gu  $@
+	echo -----
+	ls
+}
+
+gu(){
+	topath=$(gubin -showNextPath $@)
+	echo -----
+	if [ "x$topath" != "x" ];then
+		cd $topath
+	fi
+
+	gubin -showPathes
+
+	echo -----
+	gubin -showCurrent $@
+}
+
+guremove (){
+	for tgt in $@
+	do
+		gubin -removePath $tgt
+	done
 }
 
 bk(){
