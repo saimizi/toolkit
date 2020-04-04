@@ -18,9 +18,30 @@ import (
 var formatPretty bool = false
 var envFile string = "/home/joukan/.guenv"
 
+type optstr struct {
+	before string
+	after  string
+}
+
+var OptStrings = [...]optstr{
+	{"/home/joukan", "~"},
+}
+
 type Record struct {
 	Weight int
 	Path   string
+}
+
+func (c Record) optPath() string {
+
+	for _, s := range OptStrings {
+		if strings.Contains(c.Path, s.before) {
+			return strings.ReplaceAll(c.Path, s.before, s.after)
+		}
+
+	}
+
+	return c.Path
 }
 
 var records []Record
@@ -91,6 +112,34 @@ func saveEnv() error {
 	return err
 }
 
+func cleanPathes() {
+
+	var newrecords []Record
+
+	updated := false
+
+	for _, r := range records {
+		fi, err := os.Stat(r.Path)
+		if err != nil {
+			updated = true
+			continue
+		}
+
+		if !fi.IsDir() {
+			updated = true
+			continue
+		}
+
+		newrecords = append(newrecords, r)
+	}
+
+	records = newrecords
+
+	if updated {
+		saveEnv()
+	}
+}
+
 func showPathes() {
 
 	curr, err := os.Getwd()
@@ -98,10 +147,10 @@ func showPathes() {
 		return
 	}
 
-	fmt.Printf("0) %3s\n", curr)
+	fmt.Printf("%3d) %s\n", 0, curr)
 
 	for i, p := range records {
-		fmt.Printf("%d) %3s (%d)\n", i+1, p.Path, p.Weight)
+		fmt.Printf("%3d) %s (%d)\n", i+1, p.optPath(), p.Weight)
 	}
 }
 
@@ -258,9 +307,10 @@ func main() {
 
 	topath := flag.Args()
 
+	loadEnv()
+	cleanPathes()
 	if *boolptrShowNextPath {
 		if len(topath) != 0 {
-			loadEnv()
 			ret := showNextPath(topath[0])
 			if ret {
 				saveEnv()
@@ -271,7 +321,6 @@ func main() {
 
 	if *boolptrRemovePath {
 		if len(topath) != 0 {
-			loadEnv()
 			ret := removePath(topath[0])
 			if ret {
 				saveEnv()
@@ -281,7 +330,6 @@ func main() {
 	}
 
 	if *boolptrShowPathes {
-		loadEnv()
 		showPathes()
 		os.Exit(0)
 	}
