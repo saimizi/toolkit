@@ -1,8 +1,12 @@
 #!/bin/bash
 
+latestde=$(docker images | sed -n 2p | awk '{printf("%s:%s", $2,$3)}')
+latestdename=$(echo $latestde | sed "s%[\.|:]%%g")
+
 complete -f -d -W "-p -H bug build clean doc env fix fmt generate get install list mod run test tool version vet" go
 complete -W "buildmode c cache environment filetype go.mod gopath gopath-get goproxy importpath modules module-get module-auth module-private packages testflag testfunc" go-help
 complete -d -W "-p -H -removePath -showCurrent -showNextPath -showPatches" gubin
+complete -d -W "--rm -it --name= --hostname=${latestdename} ${latestde} " docker-run
 
 showdirs(){
 	local dirlist
@@ -578,3 +582,16 @@ decomp(){
 
 	done
 }
+
+nocolor() {
+       cat $1 |  sed -r "s:\x1B\[[0-9;]*[mK]::g"
+}
+
+srctree() {
+       find $1 -type d|sort|sed -ne'1b;s/[^\/]*\//+--/g;s/+--+/|  +/g;s/+--+/|  +/g;s/+--|/|  |/g;p'
+}
+
+srctree_opt() {
+       find  $1  \( -path "*.git" -o -path "*.deps" \)  -prune -o  -type d |sort|sed -ne'1b;s/[^\/]*\//+--/g;s/+--+/|  +/g;s/+--+/|  +/g;s/+--|/|  |/g;p'
+}
+
