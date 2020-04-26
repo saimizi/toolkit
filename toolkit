@@ -7,6 +7,47 @@ complete -f -d -W "-p -H bug build clean doc env fix fmt generate get install li
 complete -W "buildmode c cache environment filetype go.mod gopath gopath-get goproxy importpath modules module-get module-auth module-private packages testflag testfunc" go-help
 complete -d -W "-p -H -removePath -showCurrent -showNextPath -showPatches" gubin
 complete -d -W "--rm -it --name= --hostname=${latestdename} ${latestde} " docker-run
+complete -f -d -W "--basepath --bbpath -d -q -h --color add modify upgrade status search latest-version build rename edit-recipe find-recipe configure-help update-recipe reset finish deploy-target undeploy-target build-image create-workspace extract sync export import" devtool
+complete -f -d -W "-d -q -F --color -h add-layer remove-layer flatten show-layers show-overlayed show-recipes show-appends show-cross-depends layerindex-fetch layerindex-show-depends create-layer" bitbake-layers
+complete -f -d -W "js-image-virt js-image-weston js-image-weston-ivi js-image-games cleansstate clean menuconfit patch  fetch install configure package" bitbake
+
+
+sortpara() {
+	local tp
+	local ret
+	local opt
+	local para
+
+	for tp in $@
+	do
+		re="-[a-z|A-Z]*"
+		if [[ $tp = $re ]];then
+			opt="$opt $tp"
+			continue
+		fi
+
+		para="${para} $tp"
+	done
+
+
+	tmpfile=$(mktemp tmp.XXXX)
+	if [ ! -f $tmpfile ];then
+		return
+	fi
+
+	for tp in $para
+	do
+		echo $tp >> $tmpfile
+	done
+
+	for tp in $(cat $tmpfile | sort $opt)
+	do
+		ret="$ret $tp"
+	done
+
+	echo $ret
+	rm $tmpfile
+}
 
 showdirs(){
 	local dirlist
@@ -133,7 +174,8 @@ gu(){
 }
 
 guremove (){
-	for tgt in $@
+	sorted=$(sortpara -r -n $@)
+	for tgt in $sorted
 	do
 		gubin -removePath $tgt
 	done
