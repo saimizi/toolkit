@@ -1,6 +1,8 @@
 #!/bin/bash
 
-latestde=$(docker images | sed -n 2p | awk '{printf("%s:%s", $2,$3)}')
+#latestde=$(docker images | grep " de "| sed -n 1p | awk '{printf("%s:%s", $2,$3)}')
+#latestdename=$(echo $latestde | sed "s%[\.|:]%%g")
+latestde=de:0.4k
 latestdename=$(echo $latestde | sed "s%[\.|:]%%g")
 
 complete -f -d -W "-p -H bug build clean doc env fix fmt generate get install list mod run test tool version vet" go
@@ -637,3 +639,6 @@ srctree_opt() {
        find  $1  \( -path "*.git" -o -path "*.deps" \)  -prune -o  -type d |sort|sed -ne'1b;s/[^\/]*\//+--/g;s/+--+/|  +/g;s/+--+/|  +/g;s/+--|/|  |/g;p'
 }
 
+need_reboot() {
+	[ -f /var/run/reboot-required ] && cat /var/run/reboot-required
+}
