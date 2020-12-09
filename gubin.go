@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -28,8 +29,9 @@ var OptStrings = [...]optstr{
 }
 
 type Record struct {
-	Weight int
-	Path   string
+	Weight    int
+	LRU_count int
+	Path      string
 }
 
 func (c Record) optPath() string {
@@ -42,6 +44,10 @@ func (c Record) optPath() string {
 	}
 
 	return c.Path
+}
+
+func (c Record) Basename() string {
+	return filepath.Base(c.Path)
 }
 
 var records []Record
@@ -70,7 +76,7 @@ func loadEnv() error {
 
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
-			_, err := fmt.Sscanf(scanner.Text(), "%d,%s", &record.Weight, &record.Path)
+			_, err := fmt.Sscanf(scanner.Text(), "%d,%d,%s", &record.Weight, &record.LRU_count, &record.Path)
 			if err != nil {
 				continue
 			}
@@ -97,7 +103,12 @@ func saveEnv() error {
 		sort.Slice(records, fn)
 
 		for _, r := range records {
-			str := fmt.Sprintf("%d,%s\n", r.Weight, r.Path)
+			// Do not store old records
+			if r.LRU_count < -100 {
+				continue
+			}
+
+			str := fmt.Sprintf("%d,%d,%s\n", r.Weight, r.LRU_count, r.Path)
 
 			_, err = f.WriteString(str)
 			if err != nil {
@@ -149,6 +160,11 @@ func showPathes() {
 
 	fmt.Printf("%3d) %s\n", 0, curr)
 
+	fn := func(i, j int) bool {
+		return records[i].LRU_count > records[j].LRU_count
+	}
+	sort.Slice(records, fn)
+
 	for i, p := range records {
 		fmt.Printf("%3d) %s (%d)\n", i+1, p.optPath(), p.Weight)
 	}
@@ -156,8 +172,12 @@ func showPathes() {
 
 func showNextPath(topath string) bool {
 
+	for i, _ := range records {
+		records[i].LRU_count--
+	}
+
 	fn := func(i, j int) bool {
-		return records[i].Path < records[j].Path
+		return records[i].LRU_count > records[j].LRU_count
 	}
 	sort.Slice(records, fn)
 
@@ -178,25 +198,28 @@ func showNextPath(topath string) bool {
 		if j < len(records) {
 			fmt.Printf(records[j].Path)
 			records[j].Weight++
+			records[j].LRU_count = 1
 			return true
 		}
 	}
 
 	realTopath, err := realpath.Realpath(topath)
 	if err == nil {
-
 		for i, r := range records {
 			if r.Path == realTopath {
 				fmt.Printf(r.Path)
 				records[i].Weight++
+				records[i].LRU_count = 1
 				return true
 			}
 
 			if (r.Path + "/") == realTopath {
 				fmt.Printf(r.Path)
 				records[i].Weight++
+				records[i].LRU_count = 1
 				return true
 			}
+
 		}
 
 		fi, err := os.Stat(realTopath)
@@ -205,6 +228,7 @@ func showNextPath(topath string) bool {
 				var newrecord Record
 
 				newrecord.Weight = 1
+				newrecord.LRU_count = 1
 				newrecord.Path = realTopath
 
 				records = append(records, newrecord)
@@ -215,15 +239,31 @@ func showNextPath(topath string) bool {
 		}
 	}
 
+	for i, r := range records {
+		if r.Basename() == topath {
+			fmt.Printf(r.Path)
+			records[i].Weight++
+			records[i].LRU_count = 1
+			return true
+		}
+
+		if (r.Basename() + "/") == topath {
+			fmt.Printf(r.Path)
+			records[i].Weight++
+			records[i].LRU_count = 1
+			return true
+		}
+	}
+
 	//	fn1 := func(i, j int) bool {
 	//		return records[i].Weight > records[j].Weight
 	//	}
 	//	sort.Slice(records, fn1)
 
-	for i, r := range records {
+	for _, r := range records {
 		if strings.Contains(r.Path+"/", topath) {
 			fmt.Printf(r.Path)
-			records[i].Weight++
+			r.LRU_count++
 			return true
 		}
 	}
@@ -235,7 +275,7 @@ func showNextPath(topath string) bool {
 func removePath(topath string) bool {
 
 	fn := func(i, j int) bool {
-		return records[i].Path < records[j].Path
+		return records[i].LRU_count > records[j].LRU_count
 	}
 	sort.Slice(records, fn)
 
@@ -249,12 +289,14 @@ func removePath(topath string) bool {
 		}
 
 		if j < (len(records) - 1) {
+			fmt.Printf("Remove %d) %s\n", j, records[j].optPath())
 			records[j] = records[len(records)-1]
 			records = records[:len(records)-1]
 			return true
 		}
 
 		if j == (len(records) - 1) {
+			fmt.Printf("Remove %d) %s\n", j, records[j].optPath())
 			records = records[:len(records)-1]
 			return true
 		}
@@ -262,12 +304,14 @@ func removePath(topath string) bool {
 
 	for i, r := range records {
 		if r.Path == topath {
+			fmt.Printf("Remove %d) %s\n", i, records[i].optPath())
 			records[i] = records[len(records)-1]
 			records = records[:len(records)-1]
 			return true
 		}
 
 		if (r.Path + "/") == topath {
+			fmt.Printf("Remove %d) %s\n", i, records[i].optPath())
 			records[i] = records[len(records)-1]
 			records = records[:len(records)-1]
 			return true
@@ -278,6 +322,8 @@ func removePath(topath string) bool {
 	for _, r := range records {
 		if !strings.Contains(r.Path+"/", topath) {
 			newrecords = append(newrecords, r)
+		} else {
+			fmt.Printf("Remove %s\n", r.optPath())
 		}
 	}
 
