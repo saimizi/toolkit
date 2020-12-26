@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"github.com/fatih/color"
-	"github.com/yookoala/realpath"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -14,6 +12,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/fatih/color"
+	"github.com/yookoala/realpath"
 )
 
 var formatPretty bool = false
@@ -352,6 +353,12 @@ func main() {
 	formatPretty = *boolptrPretty
 
 	topath := flag.Args()
+
+	envpath := os.Getenv("HOME")
+	if envpath == "" {
+		envpath = "/tmp"
+	}
+	envFile = envpath + "/.guenv"
 
 	loadEnv()
 	cleanPathes()

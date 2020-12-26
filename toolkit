@@ -2,7 +2,7 @@
 
 #latestde=$(docker images | grep " de "| sed -n 1p | awk '{printf("%s:%s", $2,$3)}')
 #latestdename=$(echo $latestde | sed "s%[\.|:]%%g")
-latestde=de:0.4k
+latestde=de:0.4l
 latestdename=$(echo $latestde | sed "s%[\.|:]%%g")
 
 complete -f -d -W "-p -H bug build clean doc env fix fmt generate get install list mod run test tool version vet" go
@@ -12,6 +12,8 @@ complete -d -W "--rm -it --name= --hostname=${latestdename} ${latestde} " docker
 complete -f -d -W "--basepath --bbpath -d -q -h --color add modify upgrade status search latest-version build rename edit-recipe find-recipe configure-help update-recipe reset finish deploy-target undeploy-target build-image create-workspace extract sync export import" devtool
 complete -f -d -W "-d -q -F --color -h add-layer remove-layer flatten show-layers show-overlayed show-recipes show-appends show-cross-depends layerindex-fetch layerindex-show-depends create-layer" bitbake-layers
 complete -f -d -W "js-image-virt js-image-weston js-image-weston-ivi js-image-games cleansstate clean menuconfit patch  fetch install configure package" bitbake
+complete -f -d -W "gzip bzip2 xz brotli lzop lz4 -t -m -w -h" comp
+
 
 
 sortpara() {
@@ -269,7 +271,7 @@ compress(){
 	zip)
 		ext=zip
 		;;
-	bro)
+	brotli)
 		best=11
 		fast=0
 	esac
@@ -290,9 +292,9 @@ compress(){
 	zip)
 		`which time` -f "%E %M" -o .comp.log $cmd ${realname}${mark}${dotar}.${ext} ${infile}
 		;;
-	bro)
+	brotli)
 		#{ time $cmd --quality $level --input $infile --output $infile.${ext}; } 2>.comp.log
-		`which time` -f "%E %M" -o .comp.log $cmd --quality $level --input $infile --output ${realname}${mark}${dotar}.${ext}
+		`which time` -f "%E %M" -o .comp.log $cmd --quality=$level --output=${realname}${mark}${dotar}.${ext} $infile 
 		;;
 	esac
 
@@ -383,7 +385,7 @@ comp(){
 			fi
 
 			skip=no
-			for tp in gzip bzip2 xz bro lzop lz4 zip bz2 gz
+			for tp in gzip bzip2 xz brotli lzop lz4 zip bz2 gz
 			do
 				if [ "x$tp" = "x$1" ];then
 					case $tp in
@@ -497,9 +499,9 @@ decompress(){
 	zip)
 		`which time` -f "%E %M" -o .decomp.log un$cmd $infile 
 		;;
-	bro)
+	brotli)
 		#{ time $cmd --decompress --input $infile --output ${fname} ; } 2>.decomp.log
-		`which time` -f "%E %M" -o .decomp.log $cmd --decompress --input $infile --output ${fname}
+		`which time` -f "%E %M" -o .decomp.log $cmd --decompress --output ${fname} $infile 
 	esac
 
 	#wtime=`cat .decomp.log| grep "^real" | awk '{print $2}'`
@@ -521,7 +523,7 @@ decompress(){
 decomp_usage(){
 	echo "Usage: decomp -[h|m] [compressed file1] [compressed file2]...."
 	echo "       Recognized file extensions:"
-	echo "       .gz .bzip2 .xz .bro .lzop .lz4"
+	echo "       .gz .bzip2 .xz .brotli .lzop .lz4"
 	echo "       .tar.gz .tar.bzip2 tar.xz .tar.bro .tar.lzop .lz4"
 	echo -e "\t -m: mv decompressed files to current directory."
 	echo -e "\t -h: show this help message."
@@ -579,7 +581,7 @@ decomp(){
 	do
 		gfname=${tf%.*}
 		gftype=
-		for tp in gz bzip2 xz bro lzop lz4 zip bz2 gzip
+		for tp in gz bzip2 xz brotli lzop lz4 zip bz2 gzip
 		do
 			if [ $tp = ${tf##*.} ];then
 
