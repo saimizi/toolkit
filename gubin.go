@@ -240,6 +240,7 @@ func showNextPath(topath string) bool {
 		}
 	}
 
+	// Check the last name match
 	for i, r := range records {
 		if r.Basename() == topath {
 			fmt.Printf(r.Path)
@@ -252,6 +253,15 @@ func showNextPath(topath string) bool {
 			fmt.Printf(r.Path)
 			records[i].Weight++
 			records[i].LRU_count = 1
+			return true
+		}
+	}
+
+	// Check the last name include
+	for _, r := range records {
+		if strings.Contains(r.Basename()+"/", topath) {
+			fmt.Printf(r.Path)
+			r.LRU_count++
 			return true
 		}
 	}
