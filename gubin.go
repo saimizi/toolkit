@@ -35,6 +35,8 @@ type Record struct {
 	Path      string
 }
 
+var candidates map[string]bool = make(map[string]bool)
+
 func (c Record) optPath() string {
 
 	for _, s := range OptStrings {
@@ -49,6 +51,37 @@ func (c Record) optPath() string {
 
 func (c Record) Basename() string {
 	return filepath.Base(c.Path)
+}
+
+func (c Record) RegisterSubPaths(m map[string]bool) []string {
+	var cpath []string
+
+	topath := c.Path
+	topath = strings.TrimSuffix(topath, "/")
+	topath = strings.TrimPrefix(topath, "/")
+	ss := strings.Split(topath, "/")
+
+	for i := 0; i < len(ss); i++ {
+		var ns string
+		for j := 0; j < i; j++ {
+			ns = ns + "/" + ss[j]
+		}
+		if m[ns] == false {
+			m[ns] = true
+		}
+	}
+
+	return cpath
+}
+
+func NewRecord(topath string) Record {
+	var r Record
+
+	r.Path = topath
+	r.LRU_count = 1
+	r.Weight = 1
+
+	return r
 }
 
 var records []Record
@@ -82,6 +115,7 @@ func loadEnv() error {
 				continue
 			}
 
+			record.RegisterSubPaths(candidates)
 			records = append(records, record)
 		}
 
@@ -226,11 +260,8 @@ func showNextPath(topath string) bool {
 		fi, err := os.Stat(realTopath)
 		if err == nil {
 			if fi.IsDir() {
-				var newrecord Record
-
-				newrecord.Weight = 1
-				newrecord.LRU_count = 1
-				newrecord.Path = realTopath
+				newrecord := NewRecord(realTopath)
+				newrecord.RegisterSubPaths(candidates)
 
 				records = append(records, newrecord)
 
@@ -266,11 +297,21 @@ func showNextPath(topath string) bool {
 		}
 	}
 
+	// Check the candidates
+	for s := range candidates {
+		r := NewRecord(s)
+		if r.Basename() == topath ||
+			(r.Basename()+"/") == topath {
+			records = append(records, r)
+			fmt.Printf(r.Path)
+			return true
+		}
+	}
+
 	//	fn1 := func(i, j int) bool {
 	//		return records[i].Weight > records[j].Weight
 	//	}
 	//	sort.Slice(records, fn1)
-
 	for _, r := range records {
 		if strings.Contains(r.Path+"/", topath) {
 			fmt.Printf(r.Path)
