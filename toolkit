@@ -2,7 +2,7 @@
 
 #latestde=$(docker images | grep " de "| sed -n 1p | awk '{printf("%s:%s", $2,$3)}')
 #latestdename=$(echo $latestde | sed "s%[\.|:]%%g")
-latestde=de:0.4l
+latestde=de:0.4o
 latestdename=$(echo $latestde | sed "s%[\.|:]%%g")
 
 complete -f -d -W "-p -H bug build clean doc env fix fmt generate get install list mod run test tool version vet" go
@@ -13,6 +13,7 @@ complete -f -d -W "--basepath --bbpath -d -q -h --color add modify upgrade statu
 complete -f -d -W "-d -q -F --color -h add-layer remove-layer flatten show-layers show-overlayed show-recipes show-appends show-cross-depends layerindex-fetch layerindex-show-depends create-layer" bitbake-layers
 complete -f -d -W "js-image-virt js-image-weston js-image-weston-ivi js-image-games cleansstate clean menuconfit patch  fetch install configure package" bitbake
 complete -f -d -W "gzip bzip2 xz brotli lzop lz4 -t -m -w -h" comp
+complete -W "--no-heading --binary -c --crlf --file --files --files-with-matches --files-without-match --fixed-strings --multiline --regexp --sort --sortr --text --trim --type --type-list --type-not --with-filename --word-regexp" rg
 
 
 
