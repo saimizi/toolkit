@@ -2,7 +2,7 @@
 
 #latestde=$(docker images | grep " de "| sed -n 1p | awk '{printf("%s:%s", $2,$3)}')
 #latestdename=$(echo $latestde | sed "s%[\.|:]%%g")
-latestde=de:0.4p
+latestde=de:0.4x
 latestdename=$(echo $latestde | sed "s%[\.|:]%%g")
 
 complete -f -d -W "-p -H bug build clean doc env fix fmt generate get install list mod run test tool version vet" go
@@ -14,7 +14,7 @@ complete -f -d -W "-d -q -F --color -h add-layer remove-layer flatten show-layer
 complete -f -d -W "js-image-virt js-image-weston js-image-weston-ivi js-image-games cleansstate clean menuconfit patch  fetch install configure package" bitbake
 complete -f -d -W "gzip bzip2 xz brotli lzop lz4 -t -m -w -h" comp
 complete -W "--no-heading --binary -c --crlf --file --files --files-with-matches --files-without-match --fixed-strings --multiline --regexp --sort --sortr --text --trim --type --type-list --type-not --with-filename --word-regexp" rg
-tmux_sessions=$(tmux list-sessions | awk 'BEGIN{FS=":"}{print $1}' | xargs)
+tmux_sessions=$(tmux list-sessions 2>/dev/null | awk 'BEGIN{FS=":"}{print $1}' | xargs)
 complete -W " list-sessions list-panes list-windows list-buffers list-client list-keys list-commands new attach -t -s ${tmux_sessions}" tmux
 
 sortpara() {
@@ -118,7 +118,7 @@ go-help(){
 	go help $1
 }
 
-g(){
+gu0(){
 	local index
 	local index_likely
 	local rundant
@@ -194,10 +194,6 @@ grdel (){
 	done
 }
 
-gr() {
-	gru $*
-}
-
 gru() {
 	local topath=""
 
@@ -212,6 +208,26 @@ gru() {
 	rgubin -p
 	echo -----
 	ls
+}
+
+_sel() {
+	rgubin -p -t d
+    exa -Dg
+}
+
+gr() {
+	if [ "x$@" != "x" ]; then
+		topath=$(rgubin -t d -n $@)
+    fi
+
+	if [ "x$topath"  != "x" ];then 
+		cd $topath
+        return
+    fi
+
+	t=$( _sel | fzf --layout=reverse  --info=hidden -i --header="Selection:")
+	index=$(echo $t | awk 'BETIN{FS=")"}{print $1}' | sed "s/)//g")
+	gru $index
 }
 
 bk(){
@@ -239,6 +255,34 @@ bk(){
 	showdirs
 }
 
+RGUBIN_CFG=$HOME/.gv.env
+gw () {
+    tf=""
+
+	if [ "x$@" != "x" ]; then
+		tf=$(rgubin -f $RGUBIN_CFG -n $@ -t f)
+
+        if [ "x$tf" != "x" ]; then
+            nvim $tf
+            return
+        fi
+
+        tfr=$(rgubin -f $RGUBIN_CFG -p -e $@ -t f | fzf --layout=reverse  --info=hidden -i --header="Selection:")
+    else
+        tfr=$(rgubin -f $RGUBIN_CFG -p -t f -e "<Quit>" | fzf --layout=reverse  --info=hidden -i --header="Selection:")
+    fi
+
+	tf=$(echo $tfr | awk 'BETIN{FS=")"}{print $2}')
+    if [ "x$tf" = "x" ]; then
+        return
+    fi
+
+    if [ "x$tf" = "x<Quit>" ];then
+        return
+    fi
+
+    nvim $tf
+}
 
 find_file_type(){
 	local tdir
@@ -676,4 +720,11 @@ srctree_opt() {
 
 need_reboot() {
 	[ -f /var/run/reboot-required ] && cat /var/run/reboot-required
+}
+
+g(){
+	t=`gr | fzf`
+	index=$(echo $t | awk 'BETIN{FS=")"}{print $1}' | sed "s/)//g")
+	gr $index
+
 }

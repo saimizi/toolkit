@@ -85,8 +85,6 @@ class Memo:
     def GetName(self):
     	return self.name
 
-
-
 def run(param):
 	moset=[]
 	search_target=memo_path
