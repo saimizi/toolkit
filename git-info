@@ -197,7 +197,8 @@ git_info () {
     fi
 
     if [ -n "$PAGINATE" ]; then
-        do_git_info "$@" | git-pager
+        #do_git_info "$@" | less -v
+        do_git_info "$@"
     else
         do_git_info "$@"
     fi

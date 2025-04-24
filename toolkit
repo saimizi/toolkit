@@ -166,7 +166,7 @@ gu0(){
 }
 
 gu(){
-	topath=$(gubin -showNextPath $@)
+	local topath=$(gubin -showNextPath $@)
 	echo -----
 	if [ "x$topath" != "x" ];then
 		cd $topath
@@ -212,14 +212,16 @@ gru() {
 
 _sel() {
 	rgubin -p -t d
-    exa -Dg
+    eza -Dg
 }
 
 gr() {
+	local topath=""
 	if [ "x$@" != "x" ]; then
 		topath=$(rgubin -t d -n $@)
     fi
 
+	echo "topath: ${topath}"
 	if [ "x$topath"  != "x" ];then 
 		cd $topath
         return
