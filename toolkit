@@ -194,6 +194,7 @@ grdel (){
 	done
 }
 
+RGUBIN_GR_CFG=$HOME/.gr.${USER}.env
 gru() {
 	local topath=""
 
@@ -205,31 +206,32 @@ gru() {
 		cd $topath
 	fi
 
-	rgubin -p
+	rgubin -f $RGUBIN_GR_CFG -p
 	echo -----
 	ls
 }
 
 _sel() {
-	rgubin -p -t d
+	rgubin -f $RGUBIN_GR_CFG -p -t d
     eza -Dg
 }
 
 gr() {
 	local topath=""
 	if [ "x$@" != "x" ]; then
-		topath=$(rgubin -t d -n $@)
+		topath=$(rgubin -f $RGUBIN_GR_CFG -t d -n $@)
     fi
 
-	echo "topath: ${topath}"
+	#echo "topath: ${topath}"
 	if [ "x$topath"  != "x" ];then 
 		cd $topath
         return
     fi
 
 	t=$( _sel | fzf --layout=reverse  --info=hidden -i --header="Selection:")
-	index=$(echo $t | awk 'BETIN{FS=")"}{print $1}' | sed "s/)//g")
-	gru $index
+	topath=$(echo $t | sed 's/^[[:space:]]*//' | cut -d " " -f 2)
+	#echo "topath2: ${topath}"
+	gru $topath
 }
 
 bk(){
@@ -257,7 +259,7 @@ bk(){
 	showdirs
 }
 
-RGUBIN_CFG=$HOME/.gv.env
+RGUBIN_CFG=$HOME/.gv.${USER}.env
 gw () {
     tf=""
 
