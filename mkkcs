@@ -1,59 +1,82 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-#mkkcs <command|PATH name> [mn10300|uniphier|arm|kernel|NULL]
+# mkkcs: create or clean cscope database
+# Usage:
+#   mkkcs [directory]
+#   mkkcs clean [directory]
 
-if [ "$1" = "" ];then
-	exit
-fi
+set -e
 
-if [ "$1" = "clean" ];then
-	rm cscope.*
-	exit
+# --- Parse subcommand ---------------------------------------------------------
+
+SUBCMD=""
+TARGET_DIR=""
+
+if [[ "$1" == "clean" ]]; then
+    SUBCMD="clean"
+    TARGET_DIR="${2:-$(pwd)}"
 else
-	KSRC=`readlink -f $1`
-	ARCH=$2
+    SUBCMD="create"
+    TARGET_DIR="${1:-$(pwd)}"
 fi
 
-if [ ! -d "$KSRC" ];then
-	exit
+TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
+
+# --- Build skip directory list ------------------------------------------------
+
+DEFAULT_SKIP_DIRS=(
+    "test"
+    "doc"
+    "Documentation"
+    "script"
+    "scripts"
+)
+
+USER_SKIP_DIRS=()
+if [[ -n "$SKIP_DIRS" ]]; then
+    # shellcheck disable=SC2206
+    USER_SKIP_DIRS=($SKIP_DIRS)
 fi
 
-if [ "$ARCH" == "mn10300" ];then
-	find $KSRC -path "$KSRC/arch/*" ! -path "$KSRC/arch/mn10300*" -prune -o 			\
-	 -path "$KSRC/tmp*" -prune -o									\
-	 -path "$KSRC/\.*" -prune -o									\
-	 -path "$KSRC/Documentation*" -prune -o 							\
-	 -path "$KSRC/scripts*" -prune -o								\
-	 -name "*.[chsS]" -print >cscope.files
-elif [ "$ARCH" == "arm" ];then
-	find $KSRC  											\
-	 -path "$KSRC/arch/*" ! -path "$KSRC/arch/arm*" -prune -o					\
-	 -path "$KSRC/tmp*" -prune -o									\
-	 -path "$KSRC/\.*" -prune -o									\
-	 -path "$KSRC/Documentation*" -prune -o 							\
-	 -path "$KSRC/scripts*" -prune -o								\
-	 -name "*.[chsS]" -print >cscope.files
-elif [ "$ARCH" == "uniphier" ];then
-	find $KSRC  											\
-	 -path "$KSRC/arch/*" ! -path "$KSRC/arch/arm*" -prune -o					\
-	 -path "$KSRC/arch/arm/mach-*" ! -path "$KSRC/arch/arm/mach-uniphier*" -prune -o		\
-	 -path "$KSRC/arch/arm/plat-*" -prune -o							\
-	 -path "$KSRC/tmp*" -prune -o									\
-	 -path "$KSRC/\.*" -prune -o									\
-	 -path "$KSRC/Documentation*" -prune -o 							\
-	 -path "$KSRC/scripts*" -prune -o								\
-	 -name "*.[chsS]" -print >cscope.files
-elif [ "$ARCH" == "kernel" ];then
-	find $KSRC  											\
-	 -path "$KSRC/tmp*" -prune -o									\
-	 -path "$KSRC/\.*" -prune -o									\
-	 -path "$KSRC/Documentation*" -prune -o 							\
-	 -name "*.[chsS]" -print >cscope.files
-else
-	find $KSRC -name "*.[chsS]" -print >cscope.files
-	find $KSRC -name "*.cpp" -print >>cscope.files
-	find $KSRC -name "*.hpp" -print >>cscope.files
+SKIP_LIST=("${DEFAULT_SKIP_DIRS[@]}" "${USER_SKIP_DIRS[@]}")
+
+# Build find prune expression as an array (no eval!)
+PRUNE_EXPR=()
+for d in "${SKIP_LIST[@]}"; do
+    PRUNE_EXPR+=( -path "./$d" -prune -o )
+done
+
+# --- Clean mode ---------------------------------------------------------------
+
+if [[ "$SUBCMD" == "clean" ]]; then
+    echo "Cleaning cscope files in: $TARGET_DIR"
+
+    rm -f "$TARGET_DIR/cscope.out" \
+          "$TARGET_DIR/cscope.files" \
+          "$TARGET_DIR/cscope.in.out" \
+          "$TARGET_DIR/cscope.po.out" \
+          "$TARGET_DIR/cscope.out.in" \
+          "$TARGET_DIR/cscope.out.po" 
+
+    echo "Done."
+    exit 0
 fi
 
+# --- Create mode --------------------------------------------------------------
 
+echo "Creating cscope database in: $TARGET_DIR"
+cd "$TARGET_DIR"
+
+echo "Generating cscope.files..."
+
+# Use array expansion safely
+find . \
+    "${PRUNE_EXPR[@]}" \
+    -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.s" -o -name "*.S" \) \
+    -print > cscope.files
+
+echo "Building cscope.out..."
 cscope -b -q -k
+
+echo "Done."
+
