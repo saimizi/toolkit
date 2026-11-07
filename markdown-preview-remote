@@ -1,0 +1,87 @@
+#!/usr/bin/bash
+
+# Usage: markdown-preview-remote [user@host]
+#        markdown-preview-remote --cleanup
+# --cleanup stops your SSH processes forwarding local port 18080 to
+# remote 127.0.0.1:8080, including tunnels started by earlier versions.
+
+cleanup() {
+    local proc executable pid arg forward i count=0
+    local -a args pending=()
+    for proc in /proc/[0-9]*; do
+        [[ -O "$proc" ]] || continue
+        executable=$(readlink "$proc/exe" 2>/dev/null) || continue
+        [[ "$executable" == */ssh ]] || continue
+        args=()
+        mapfile -d '' -t args < "$proc/cmdline" 2>/dev/null || continue
+        for ((i=1; i<${#args[@]}; i++)); do
+            arg=${args[i]}
+            forward=
+            if [[ "$arg" == -L ]]; then
+                forward=${args[i+1]:-}
+            elif [[ "$arg" == -L* ]]; then
+                forward=${arg#-L}
+            fi
+            case "$forward" in
+                127.0.0.1:18080:127.0.0.1:8080|18080:127.0.0.1:8080)
+                    pid=${proc##*/}
+                    if kill -TERM "$pid" 2>/dev/null; then
+                        pending+=("$pid")
+                    fi
+                    break
+                    ;;
+            esac
+        done
+    done
+    # Wait up to five seconds for all signaled processes to release their resources.
+    local attempt
+    local -a remaining=()
+    for ((attempt=0; attempt<=50; attempt++)); do
+        remaining=()
+        for pid in "${pending[@]}"; do
+            executable=$(readlink "/proc/$pid/exe" 2>/dev/null) || executable=
+            if [[ "$executable" == */ssh ]] && kill -0 "$pid" 2>/dev/null; then
+                remaining+=("$pid")
+            else
+                printf 'Stopped tunnel SSH process %s\n' "$pid"
+                count=$((count + 1))
+            fi
+        done
+        pending=("${remaining[@]}")
+        ((${#pending[@]} == 0)) && break
+        ((attempt == 50)) || sleep 0.1
+    done
+    if ((${#pending[@]} > 0)); then
+        printf 'Cleanup incomplete: stopped %s tunnel process(es).\n' "$count" >&2
+        printf 'Tunnel SSH process %s is still running after five seconds.\n' "${pending[@]}" >&2
+        return 1
+    fi
+    printf 'Cleanup complete: stopped %s tunnel process(es).\n' "$count"
+}
+
+case "${1:-}" in
+    --cleanup)
+        cleanup || exit "$?"
+        exit 0
+        ;;
+    --open)
+        firefox http://localhost:18080/page/1 &
+        exit 0
+        ;;
+    -h|--help)
+        printf 'Usage: %s [user@host]\n       %s --cleanup\n' "$0" "$0"
+        exit 0
+        ;;
+esac
+
+REMOTE=${1:-${REMOTE:-joukan@100.68.10.61}}
+
+printf 'Connect to %s\n' "$REMOTE"
+
+ssh -fN -o ExitOnForwardFailure=yes \
+    -o ServerAliveInterval=30 \
+    -o ServerAliveCountMax=3 \
+    -L 127.0.0.1:18080:127.0.0.1:8080 \
+    "$REMOTE" || exit "$?"
+
+firefox http://localhost:18080/page/1 &

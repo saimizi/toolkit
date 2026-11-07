@@ -1,0 +1,101 @@
+#!/usr/bin/bash
+# Forward a remote Codex control socket to /tmp/codex-remote.sock over SSH.
+# SSH connects as joukan, authenticates, then runs the tunnel in the background.
+#
+# Usage:
+#   codex-remote                       Start a tunnel with the defaults below.
+#   codex-remote HOST                  Use a different remote host.
+#   codex-remote HOST REMOTE_SOCKET    Also override the remote socket path.
+#   codex-remote --cleanup             Stop all your SSH tunnels forwarding the
+#                                      local socket and remove its socket file.
+#   codex-remote -h | --help           Show usage.
+#
+# Defaults: HOST=100.68.10.61
+#           REMOTE_SOCKET=/home/joukan/.codex/app-server-control/app-server-control.sock
+# Environment variables REMOTE and REMOTE_SOCKET override these defaults;
+# positional arguments take precedence over environment variables.
+# Example: codex-remote 100.68.10.61 /home/joukan/.codex/app-server-control/app-server-control.sock
+#
+# Repeated starts replace the local socket path but leave earlier tunnels
+# running. Run codex-remote --cleanup before starting a replacement tunnel.
+
+set -euo pipefail
+
+LOCAL_SOCKET=/tmp/codex-remote.sock
+
+cleanup() {
+    local proc executable pid arg matched i count=0
+    local -a args pending=()
+    for proc in /proc/[0-9]*; do
+        [[ -O "$proc" ]] || continue
+        executable=$(readlink "$proc/exe" 2>/dev/null) || continue
+        [[ "$executable" == */ssh ]] || continue
+        args=()
+        mapfile -d '' -t args < "$proc/cmdline" 2>/dev/null || continue
+        matched=false
+        for ((i=1; i<${#args[@]}; i++)); do
+            arg=${args[i]}
+            if [[ "$arg" == "-L${LOCAL_SOCKET}:"* ]] ||
+               [[ "$arg" == -L && "${args[i+1]:-}" == "${LOCAL_SOCKET}:"* ]]; then
+                matched=true
+                break
+            fi
+        done
+        if [[ "$matched" == true ]]; then
+            pid=${proc##*/}
+            if kill -TERM "$pid" 2>/dev/null; then
+                pending+=("$pid")
+            fi
+        fi
+    done
+    # Wait up to five seconds for all signaled processes to release their resources.
+    local attempt
+    local -a remaining=()
+    for ((attempt=0; attempt<=50; attempt++)); do
+        remaining=()
+        for pid in "${pending[@]}"; do
+            executable=$(readlink "/proc/$pid/exe" 2>/dev/null) || executable=
+            if [[ "$executable" == */ssh ]] && kill -0 "$pid" 2>/dev/null; then
+                remaining+=("$pid")
+            else
+                printf 'Stopped tunnel SSH process %s\n' "$pid"
+                count=$((count + 1))
+            fi
+        done
+        pending=("${remaining[@]}")
+        ((${#pending[@]} == 0)) && break
+        ((attempt == 50)) || sleep 0.1
+    done
+    if ((${#pending[@]} > 0)); then
+        printf 'Cleanup incomplete: stopped %s tunnel process(es).\n' "$count" >&2
+        printf 'Tunnel SSH process %s is still running after five seconds.\n' "${pending[@]}" >&2
+        return 1
+    fi
+    if [[ -S "$LOCAL_SOCKET" ]]; then
+        rm -f -- "$LOCAL_SOCKET"
+    fi
+    printf 'Cleanup complete: stopped %s tunnel process(es).\n' "$count"
+}
+
+case "${1:-}" in
+    --cleanup)
+        cleanup || exit "$?"
+        exit 0
+        ;;
+    -h|--help)
+        printf 'Usage: %s [HOST [REMOTE_SOCKET]]\n       %s --cleanup\n' "$0" "$0"
+        exit 0
+        ;;
+esac
+
+REMOTE=${1:-${REMOTE:-joukan@100.68.10.61}}
+REMOTE_SOCKET=${2:-${REMOTE_SOCKET:-/home/joukan/.codex/app-server-control/app-server-control.sock}}
+printf 'Connect to %s (local socket: %s)\n' "$REMOTE" "$LOCAL_SOCKET"
+
+exec ssh -fN \
+    -o ExitOnForwardFailure=yes \
+    -o StreamLocalBindUnlink=yes \
+    -o ServerAliveInterval=30 \
+    -o ServerAliveCountMax=3 \
+    -L "${LOCAL_SOCKET}:${REMOTE_SOCKET}" \
+    "${REMOTE}"
